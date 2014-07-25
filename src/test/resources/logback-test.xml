@@ -3,7 +3,8 @@
 	<appender name="console" class="ch.qos.logback.core.ConsoleAppender">
 		<target>System.err</target>
 		<encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
-			<pattern>[%-5level][%8relative][%-32.32logger{32}] %-64msg [%thread{32}] [%X]%n</pattern>
+			<!-- http://logback.qos.ch/manual/layouts.html -->
+			<pattern>[%-5level][%8relative][%-32.32logger{32}] %-64message [%thread{32}] [%marker] [%mdc]%n%exception{full}</pattern>
 		</encoder>
 	</appender>
 	

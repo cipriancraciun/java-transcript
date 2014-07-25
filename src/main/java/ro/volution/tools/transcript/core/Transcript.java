@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.Map;
 
 import org.slf4j.LoggerFactory;
+import org.slf4j.MarkerFactory;
 
 import com.google.common.collect.ImmutableMap;
 
@@ -168,6 +169,8 @@ public class Transcript
 				throw (new AssertionError ());
 		}
 		final LoggingEvent event = new LoggingEvent (this.getClass ().getName (), this.context.logger, level, messageFormat, exception, messageParts);
+		if (category != null)
+			event.setMarker (MarkerFactory.getMarker (category.identifier ()));
 		event.setMDCPropertyMap (this.context.resolveAttributes_1 ());
 		this.context.logger.callAppenders (event);
 	}

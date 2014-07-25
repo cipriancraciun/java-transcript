@@ -222,24 +222,23 @@ public class Transcript
 		}
 		
 		public Builder with (final EventContext.AttributeIdentifier identifier, final Object value) {
-			this.withs.put (identifier.identifier (), value);
-			return (this);
+			return (this.with (identifier.identifier (), value));
 		}
 		
 		public Builder with (final Iterable<Map.Entry<String, Object>> withs) {
 			for (final Map.Entry<String, Object> entry : withs)
-				this.withs.put (entry.getKey (), entry.getValue ());
+				this.with (entry.getKey (), entry.getValue ());
 			return (this);
 		}
 		
 		public Builder with (final Map<String, Object> withs) {
 			for (final Map.Entry<String, Object> entry : withs.entrySet ())
-				this.withs.put (entry.getKey (), entry.getValue ());
+				this.with (entry.getKey (), entry.getValue ());
 			return (this);
 		}
 		
 		public Builder with (final String identifier, final Object value) {
-			this.withs.put (identifier, value);
+			this.withs.put (identifier, (value != null) ? value : Context.nullReplacement);
 			return (this);
 		}
 		
@@ -297,5 +296,21 @@ public class Transcript
 		protected final Object owner;
 		private ImmutableMap<String, String> attributes_1 = null;
 		private static final ThreadLocal<Context> dynamicCurrent = new ThreadLocal<Context> ();
+		private static final Object nullReplacement = new Object () {
+			@Override
+			public final boolean equals (final Object object) {
+				return ((object == null) || (object == this));
+			}
+			
+			@Override
+			public final int hashCode () {
+				return (0);
+			}
+			
+			@Override
+			public final String toString () {
+				return ("null");
+			}
+		};
 	}
 }

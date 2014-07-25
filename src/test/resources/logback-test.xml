@@ -1,3 +1,5 @@
+
+<!-- http://logback.qos.ch/manual/configuration.html -->
 <configuration debug="false">
 	
 	<appender name="console" class="ch.qos.logback.core.ConsoleAppender">

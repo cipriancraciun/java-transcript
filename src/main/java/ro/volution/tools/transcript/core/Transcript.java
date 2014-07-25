@@ -2,7 +2,6 @@
 package ro.volution.tools.transcript.core;
 
 
-import java.util.ArrayList;
 import java.util.Map;
 
 import org.slf4j.LoggerFactory;
@@ -197,6 +196,10 @@ public class Transcript
 		return (new Builder (owner, dynamic));
 	}
 	
+	public static final Builder builderDynamic (final Object owner) {
+		return (Transcript.builder (owner, true));
+	}
+	
 	public static final Transcript create (final Object owner) {
 		return (Transcript.builder (owner).build ());
 	}
@@ -218,6 +221,11 @@ public class Transcript
 			return (transcript);
 		}
 		
+		public Builder with (final EventContext.AttributeIdentifier identifier, final Object value) {
+			this.withs.put (identifier.identifier (), value);
+			return (this);
+		}
+		
 		public Builder with (final Iterable<Map.Entry<String, Object>> withs) {
 			for (final Map.Entry<String, Object> entry : withs)
 				this.withs.put (entry.getKey (), entry.getValue ());
@@ -230,8 +238,8 @@ public class Transcript
 			return (this);
 		}
 		
-		public Builder with (final String with, final Object value) {
-			this.withs.put (with, value);
+		public Builder with (final String identifier, final Object value) {
+			this.withs.put (identifier, value);
 			return (this);
 		}
 		
@@ -251,42 +259,43 @@ public class Transcript
 			this.logger = logger;
 			this.attributes = attributes;
 			this.dynamic = dynamic;
+			this.dynamicParent = Context.dynamicCurrent.get ();
 			if (this.dynamic)
-				Context.stack.get ().add (this);
+				Context.dynamicCurrent.set (this);
+		}
+		
+		@Override
+		public Iterable<EventContext.Attribute> attributes () {
+			throw (new UnsupportedOperationException ());
 		}
 		
 		protected void destroy () {
 			if (this.dynamic) {
-				final ArrayList<Context> stack = Context.stack.get ();
-				final int stackSize = stack.size ();
-				if (stackSize == 0)
+				if (this != Context.dynamicCurrent.get ())
 					throw (new AssertionError ());
-				final Context head = stack.remove (stackSize - 1);
-				if (head != this)
-					throw (new AssertionError ());
+				Context.dynamicCurrent.set (this.dynamicParent);
 			}
 		}
 		
 		protected ImmutableMap<String, String> resolveAttributes_1 () {
+			if (this.attributes_1 != null)
+				return (this.attributes_1);
 			final ImmutableMap.Builder<String, String> builder = ImmutableMap.builder ();
 			for (final Map.Entry<String, Object> entry : this.attributes.entrySet ())
 				builder.put (entry.getKey (), String.valueOf (entry.getValue ()));
-			for (final Context context : Context.stack.get ())
-				if (context != this)
-					for (final Map.Entry<String, Object> entry : context.attributes.entrySet ())
-						builder.put (entry.getKey (), String.valueOf (entry.getValue ()));
-			return (builder.build ());
+			for (Context parent = this.dynamicParent; parent != null; parent = parent.dynamicParent)
+				for (final Map.Entry<String, Object> entry : parent.attributes.entrySet ())
+					builder.put (entry.getKey (), String.valueOf (entry.getValue ()));
+			this.attributes_1 = builder.build ();
+			return (this.attributes_1);
 		}
 		
 		protected final ImmutableMap<String, Object> attributes;
 		protected final boolean dynamic;
+		protected final Context dynamicParent;
 		protected final Logger logger;
 		protected final Object owner;
-		private static ThreadLocal<ArrayList<Context>> stack = new ThreadLocal<ArrayList<Context>> () {
-			@Override
-			protected final ArrayList<Context> initialValue () {
-				return (new ArrayList<Context> (128));
-			}
-		};
+		private ImmutableMap<String, String> attributes_1 = null;
+		private static final ThreadLocal<Context> dynamicCurrent = new ThreadLocal<Context> ();
 	}
 }

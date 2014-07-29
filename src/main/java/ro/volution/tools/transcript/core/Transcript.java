@@ -188,6 +188,14 @@ public class Transcript
 	
 	protected final Context context;
 	
+	public static final Builder builder (final Class<?> owner) {
+		return (Transcript.builder (owner, false));
+	}
+	
+	public static final Builder builder (final Class<?> owner, final boolean dynamic) {
+		return (Transcript.builder (owner, dynamic));
+	}
+	
 	public static final Builder builder (final Object owner) {
 		return (Transcript.builder (owner, false));
 	}
@@ -196,8 +204,16 @@ public class Transcript
 		return (new Builder (owner, dynamic));
 	}
 	
+	public static final Builder builderDynamic (final Class<?> owner) {
+		return (Transcript.builder (owner, true));
+	}
+	
 	public static final Builder builderDynamic (final Object owner) {
 		return (Transcript.builder (owner, true));
+	}
+	
+	public static final Transcript create (final Class<?> owner) {
+		return (Transcript.builder (owner).build ());
 	}
 	
 	public static final Transcript create (final Object owner) {
@@ -215,7 +231,8 @@ public class Transcript
 		}
 		
 		public Transcript build () {
-			final Logger logger = (Logger) LoggerFactory.getLogger (this.owner.getClass ());
+			final Class<?> ownerClass = (this.owner instanceof Class) ? (Class<?>) this.owner : this.owner.getClass ();
+			final Logger logger = (Logger) LoggerFactory.getLogger (ownerClass);
 			final Context context = new Context (this.owner, logger, this.withs.build (), this.dynamic);
 			final Transcript transcript = new Transcript (context);
 			return (transcript);

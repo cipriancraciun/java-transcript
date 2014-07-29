@@ -11,7 +11,8 @@ public enum Categories
 {
 	A (),
 	B (),
-	C ();
+	C (),
+	D ();
 	@Override
 	public final String identifier () {
 		return (this.name ());

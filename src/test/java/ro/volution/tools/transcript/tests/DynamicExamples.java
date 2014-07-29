@@ -51,8 +51,21 @@ public class DynamicExamples
 		}
 	}
 	
-	@Test (expected = IllegalArgumentException.class)
+	@Test
 	public void exampleD () {
+		final Transcript transcript = Transcript.builder (this).with (Attributes.X, 5).build ();
+		transcript.informative (Categories.D, "without dynamic context;");
+		final Transcript dynamicTranscript = this.transcriptForSession ().build ();
+		try {
+			transcript.informative (Categories.D, "with dynamic context;");
+		} finally {
+			dynamicTranscript.destroy ();
+		}
+		transcript.informative (Categories.D, "without dynamic context;");
+	}
+	
+	@Test (expected = IllegalArgumentException.class)
+	public void exampleE () {
 		final Transcript transcript = this.transcriptForSession ().build ();
 		try {
 			this.exampleB ();

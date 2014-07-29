@@ -2,16 +2,21 @@
 package ro.volution.tools.transcript.core;
 
 
+import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.Map;
 
 import org.slf4j.LoggerFactory;
 import org.slf4j.MarkerFactory;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.LoggingEvent;
+import ro.volution.tools.transcript.core.EventContext.Attribute;
+import ro.volution.tools.transcript.core.EventContext.AttributeIdentifier;
 
 
 public class Transcript
@@ -170,7 +175,7 @@ public class Transcript
 		final LoggingEvent event = new LoggingEvent (this.getClass ().getName (), this.context.logger, level, messageFormat, exception, messageParts);
 		if (category != null)
 			event.setMarker (MarkerFactory.getMarker (category.identifier ()));
-		event.setMDCPropertyMap (this.context.resolveAttributes_1 ());
+		event.setMDCPropertyMap (this.context.getAttributesMdc ());
 		this.context.logger.callAppenders (event);
 	}
 	
@@ -232,7 +237,7 @@ public class Transcript
 			this.owner = owner;
 			this.parent = parent;
 			this.dynamic = dynamic;
-			this.withs = ImmutableMap.builder ();
+			this.withs = ImmutableList.builder ();
 		}
 		
 		public Transcript build () {
@@ -243,13 +248,22 @@ public class Transcript
 			return (transcript);
 		}
 		
-		public Builder with (final EventContext.AttributeIdentifier identifier, final Object value) {
-			return (this.with (identifier.identifier (), value));
+		public Builder with (final Attribute ... attributes) {
+			this.withs.add (attributes);
+			return (this);
 		}
 		
-		public Builder with (final Iterable<Map.Entry<String, Object>> withs) {
-			for (final Map.Entry<String, Object> entry : withs)
-				this.with (entry.getKey (), entry.getValue ());
+		public Builder with (final Attribute attribute) {
+			this.withs.add (attribute);
+			return (this);
+		}
+		
+		public Builder with (final AttributeIdentifier identifier, final Object value) {
+			return (this.with (Attribute.create (identifier, value)));
+		}
+		
+		public Builder with (final Iterable<Attribute> attributes) {
+			this.withs.addAll (attributes);
 			return (this);
 		}
 		
@@ -260,14 +274,13 @@ public class Transcript
 		}
 		
 		public Builder with (final String identifier, final Object value) {
-			this.withs.put (identifier, (value != null) ? value : Context.nullReplacement);
-			return (this);
+			return (this.with (Attribute.create (identifier, value)));
 		}
 		
 		protected final boolean dynamic;
 		protected final Object owner;
 		protected final Context parent;
-		protected final ImmutableMap.Builder<String, Object> withs;
+		protected final ImmutableList.Builder<Attribute> withs;
 	}
 	
 	public static class Context
@@ -275,70 +288,131 @@ public class Transcript
 				implements
 					EventContext
 	{
-		protected Context (final Object owner, final Logger logger, final ImmutableMap<String, Object> attributes, final Context parent, final boolean dynamic) {
+		protected Context (final Object owner, final Logger logger, final ImmutableList<Attribute> attributes, final Context parent, final boolean dynamic) {
 			super ();
 			this.owner = owner;
 			this.logger = logger;
 			this.attributes = attributes;
 			this.parent = parent;
 			this.dynamic = dynamic;
-			this.dynamicParent = Context.dynamicCurrent.get ();
+			this.dynamicParent = Context.dynamicHead.get ();
+			this.cachedCounter = 0;
+			this.cachedAttributes = null;
+			this.cachedAttributesMdc = null;
 			if (this.dynamic)
-				Context.dynamicCurrent.set (this);
+				Context.pushDynamicContext (this);
 		}
 		
 		@Override
 		public Iterable<EventContext.Attribute> attributes () {
-			throw (new UnsupportedOperationException ());
+			this.validateCached ();
+			if (this.cachedAttributes == null)
+				this.cachedAttributes = this.resolveAttributes ();
+			return (this.cachedAttributes);
+		}
+		
+		public ImmutableMap<String, String> getAttributesMdc () {
+			this.validateCached ();
+			if (this.cachedAttributesMdc == null)
+				this.cachedAttributesMdc = this.resolveAttributesMdc ();
+			return (this.cachedAttributesMdc);
 		}
 		
 		protected void destroy () {
-			if (this.dynamic) {
-				if (this != Context.dynamicCurrent.get ())
-					throw (new AssertionError ());
-				Context.dynamicCurrent.set (this.dynamicParent);
+			if (this.dynamic)
+				Context.popDynamicContext (this);
+		}
+		
+		protected ImmutableList<Attribute> resolveAttributes () {
+			final ImmutableList.Builder<Attribute> builder = ImmutableList.builder ();
+			final IdentityHashMap<AttributeIdentifier, Attribute> identifiers = new IdentityHashMap<AttributeIdentifier, Attribute> ();
+			Context.resolveAttributes_include (this, true, true, builder, identifiers);
+			final Context dynamicHead = Context.dynamicHead.get ();
+			if ((dynamicHead != null) && (dynamicHead != this) && (dynamicHead != this.parent) && (dynamicHead != this.dynamicParent))
+				Context.resolveAttributes_include (dynamicHead, true, true, builder, identifiers);
+			return (builder.build ());
+		}
+		
+		protected ImmutableMap<String, String> resolveAttributesMdc () {
+			final HashMap<String, String> attributes = new HashMap<String, String> ();
+			for (final Attribute attribute : this.attributes ()) {
+				final String identifier = attribute.identifier.identifier ();
+				if (attributes.containsKey (identifier))
+					continue;
+				final String value = String.valueOf (attribute.value);
+				attributes.put (identifier, value);
 			}
+			return (ImmutableMap.copyOf (attributes));
 		}
 		
-		protected ImmutableMap<String, String> resolveAttributes_1 () {
-			if (this.attributes_1 != null)
-				return (this.attributes_1);
-			final ImmutableMap.Builder<String, String> builder = ImmutableMap.builder ();
-			for (final Map.Entry<String, Object> entry : this.attributes.entrySet ())
-				builder.put (entry.getKey (), String.valueOf (entry.getValue ()));
-			for (Context parent = this.parent; parent != null; parent = parent.parent)
-				for (final Map.Entry<String, Object> entry : parent.attributes.entrySet ())
-					builder.put (entry.getKey (), String.valueOf (entry.getValue ()));
-			for (Context parent = this.dynamicParent; parent != null; parent = parent.dynamicParent)
-				for (final Map.Entry<String, Object> entry : parent.attributes.entrySet ())
-					builder.put (entry.getKey (), String.valueOf (entry.getValue ()));
-			this.attributes_1 = builder.build ();
-			return (this.attributes_1);
+		protected void validateCached () {
+			final int currentCounter = Context.getDynamicCounter ();
+			if (currentCounter == this.cachedCounter)
+				return;
+			this.cachedCounter = currentCounter;
+			this.cachedAttributes = null;
+			this.cachedAttributesMdc = null;
 		}
 		
-		protected final ImmutableMap<String, Object> attributes;
+		protected final ImmutableList<Attribute> attributes;
 		protected final boolean dynamic;
 		protected final Context dynamicParent;
 		protected final Logger logger;
 		protected final Object owner;
 		protected final Context parent;
-		private ImmutableMap<String, String> attributes_1 = null;
-		private static final ThreadLocal<Context> dynamicCurrent = new ThreadLocal<Context> ();
-		private static final Object nullReplacement = new Object () {
-			@Override
-			public final boolean equals (final Object object) {
-				return ((object == null) || (object == this));
-			}
-			
-			@Override
-			public final int hashCode () {
-				return (0);
-			}
-			
-			@Override
-			public final String toString () {
-				return ("null");
-			}
-		};
+		private ImmutableList<Attribute> cachedAttributes;
+		private ImmutableMap<String, String> cachedAttributesMdc;
+		private int cachedCounter;
+		
+		protected static final void advanceDynamicCounter () {
+			Context.dynamicCounter.set (Integer.valueOf (Context.getDynamicCounter () + 1));
+		}
+		
+		protected static final int getDynamicCounter () {
+			final Integer counter = Context.dynamicCounter.get ();
+			return ((counter != null) ? counter.intValue () : 0);
+		}
+		
+		protected static final void popDynamicContext (final Context head) {
+			if (head != Context.dynamicHead.get ())
+				throw (new AssertionError ());
+			// FIXME: Replace head with previous head (not with current head dynamic parent)!
+			Context.dynamicHead.set (head.dynamicParent);
+			Context.advanceDynamicCounter ();
+		}
+		
+		protected static final void pushDynamicContext (final Context head) {
+			Context.dynamicHead.set (head);
+			Context.advanceDynamicCounter ();
+		}
+		
+		protected static final void resolveAttributes_include (final Attribute attribute, final ImmutableList.Builder<Attribute> builder, final IdentityHashMap<AttributeIdentifier, Attribute> identifiers) {
+			if (identifiers.containsKey (attribute.identifier))
+				return;
+			builder.add (attribute);
+			identifiers.put (attribute.identifier, attribute);
+		}
+		
+		protected static final void resolveAttributes_include (final Context context, final boolean includeParent, final boolean includeDynamicParent, final ImmutableList.Builder<Attribute> builder, final IdentityHashMap<AttributeIdentifier, Attribute> identifiers) {
+			Context.resolveAttributes_include (context.attributes, builder, identifiers);
+			if (includeParent)
+				for (Context parent = context.parent; parent != null; parent = parent.parent)
+					Context.resolveAttributes_include (parent, includeParent, includeDynamicParent, builder, identifiers);
+			if (includeDynamicParent)
+				for (Context parent = context.dynamicParent; parent != null; parent = parent.dynamicParent)
+					Context.resolveAttributes_include (parent, includeParent, includeDynamicParent, builder, identifiers);
+		}
+		
+		protected static final void resolveAttributes_include (final Iterable<Attribute> attributes, final ImmutableList.Builder<Attribute> builder, final IdentityHashMap<AttributeIdentifier, Attribute> identifiers) {
+			for (final Attribute attribute : attributes)
+				Context.resolveAttributes_include (attribute, builder, identifiers);
+		}
+		
+		static {
+			dynamicCounter = new ThreadLocal<Integer> ();
+			dynamicHead = new ThreadLocal<Context> ();
+		}
+		private static final ThreadLocal<Integer> dynamicCounter;
+		private static final ThreadLocal<Context> dynamicHead;
 	}
 }

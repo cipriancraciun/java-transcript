@@ -71,7 +71,7 @@ public class Transcript
 	}
 	
 	public Builder fork (final boolean dynamic) {
-		return (Transcript.builder (this.context.owner, dynamic).with (this.context.attributes));
+		return (Transcript.builder (this.context.owner, this.context, dynamic));
 	}
 	
 	public Builder forkDynamic () {
@@ -201,7 +201,7 @@ public class Transcript
 	}
 	
 	public static final Builder builder (final Object owner, final boolean dynamic) {
-		return (new Builder (owner, dynamic));
+		return (Transcript.builder (owner, null, dynamic));
 	}
 	
 	public static final Builder builderDynamic (final Class<?> owner) {
@@ -220,12 +220,17 @@ public class Transcript
 		return (Transcript.builder (owner).build ());
 	}
 	
+	protected static final Builder builder (final Object owner, final Context parent, final boolean dynamic) {
+		return (new Builder (owner, parent, dynamic));
+	}
+	
 	public static class Builder
 				extends Object
 	{
-		protected Builder (final Object owner, final boolean dynamic) {
+		protected Builder (final Object owner, final Context parent, final boolean dynamic) {
 			super ();
 			this.owner = owner;
+			this.parent = parent;
 			this.dynamic = dynamic;
 			this.withs = ImmutableMap.builder ();
 		}
@@ -233,7 +238,7 @@ public class Transcript
 		public Transcript build () {
 			final Class<?> ownerClass = (this.owner instanceof Class) ? (Class<?>) this.owner : this.owner.getClass ();
 			final Logger logger = (Logger) LoggerFactory.getLogger (ownerClass);
-			final Context context = new Context (this.owner, logger, this.withs.build (), this.dynamic);
+			final Context context = new Context (this.owner, logger, this.withs.build (), this.parent, this.dynamic);
 			final Transcript transcript = new Transcript (context);
 			return (transcript);
 		}
@@ -259,9 +264,10 @@ public class Transcript
 			return (this);
 		}
 		
-		protected boolean dynamic;
-		protected Object owner;
-		protected ImmutableMap.Builder<String, Object> withs;
+		protected final boolean dynamic;
+		protected final Object owner;
+		protected final Context parent;
+		protected final ImmutableMap.Builder<String, Object> withs;
 	}
 	
 	public static class Context
@@ -269,11 +275,12 @@ public class Transcript
 				implements
 					EventContext
 	{
-		protected Context (final Object owner, final Logger logger, final ImmutableMap<String, Object> attributes, final boolean dynamic) {
+		protected Context (final Object owner, final Logger logger, final ImmutableMap<String, Object> attributes, final Context parent, final boolean dynamic) {
 			super ();
 			this.owner = owner;
 			this.logger = logger;
 			this.attributes = attributes;
+			this.parent = parent;
 			this.dynamic = dynamic;
 			this.dynamicParent = Context.dynamicCurrent.get ();
 			if (this.dynamic)
@@ -299,6 +306,9 @@ public class Transcript
 			final ImmutableMap.Builder<String, String> builder = ImmutableMap.builder ();
 			for (final Map.Entry<String, Object> entry : this.attributes.entrySet ())
 				builder.put (entry.getKey (), String.valueOf (entry.getValue ()));
+			for (Context parent = this.parent; parent != null; parent = parent.parent)
+				for (final Map.Entry<String, Object> entry : parent.attributes.entrySet ())
+					builder.put (entry.getKey (), String.valueOf (entry.getValue ()));
 			for (Context parent = this.dynamicParent; parent != null; parent = parent.dynamicParent)
 				for (final Map.Entry<String, Object> entry : parent.attributes.entrySet ())
 					builder.put (entry.getKey (), String.valueOf (entry.getValue ()));
@@ -311,6 +321,7 @@ public class Transcript
 		protected final Context dynamicParent;
 		protected final Logger logger;
 		protected final Object owner;
+		protected final Context parent;
 		private ImmutableMap<String, String> attributes_1 = null;
 		private static final ThreadLocal<Context> dynamicCurrent = new ThreadLocal<Context> ();
 		private static final Object nullReplacement = new Object () {

@@ -172,6 +172,8 @@ public class Transcript
 			default :
 				throw (new AssertionError ());
 		}
+		if (!this.context.logger.isEnabledFor (level))
+			return;
 		final LoggingEvent event = new LoggingEvent (this.getClass ().getName (), this.context.logger, level, messageFormat, exception, messageParts);
 		if (category != null)
 			event.setMarker (MarkerFactory.getMarker (category.identifier ()));

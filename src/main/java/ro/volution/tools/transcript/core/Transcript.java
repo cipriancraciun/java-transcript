@@ -200,7 +200,7 @@ public class Transcript
 	}
 	
 	public static final Builder builder (final Class<?> owner, final boolean dynamic) {
-		return (Transcript.builder (owner, dynamic));
+		return (Transcript.builder (owner, null, dynamic));
 	}
 	
 	public static final Builder builder (final Object owner) {

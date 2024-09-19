@@ -176,7 +176,7 @@ public class Transcript
 			return;
 		final LoggingEvent event = new LoggingEvent (this.getClass ().getName (), this.context.logger, level, messageFormat, exception, messageParts);
 		if (category != null)
-			event.setMarker (MarkerFactory.getMarker (category.identifier ()));
+			event.addMarker (MarkerFactory.getMarker (category.identifier ()));
 		event.setMDCPropertyMap (this.context.getAttributesMdc ());
 		this.context.logger.callAppenders (event);
 	}
